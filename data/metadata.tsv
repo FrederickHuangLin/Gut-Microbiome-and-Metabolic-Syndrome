@@ -1,0 +1,40 @@
+sampleid	age	gender	race	relation	caregiver_stress	depression	alcohol	hostility	das	metabolic_syndrome	caregiver_stress_level	depression_level	hostility_level	das_level	metabolic_syndrome_level
+2029	68	F	White	1	28	28	Yes	16	15	3	High	High	Medium	Low	Moderate
+2030	69	M	White	1	8	0	No	3	33	NA	Low	Low	Low	High	NA
+2031	57	M	White	1	29	17	Yes	28	27	3	High	High	High	Medium	Moderate
+2043	53	F	White	1	22	1	No	11	32	4	Medium	Low	Low	High	Severe
+2045	57	F	White	1	25	5	No	11	22	3	Medium	Low	Low	Low	Moderate
+2066	77	F	White	1	NA	NA	NA	NA	0	4	NA	NA	NA	Low	Severe
+2075	59	F	White	2	6	0	No	10	34	3	Low	Low	Low	High	Moderate
+2084	68	F	White	1	23	11	No	10	20	2	Medium	Medium	Low	Low	No or Mild
+2103	57	F	White	1	31	9	No	11	22	0	High	Medium	Low	Low	No or Mild
+2112	24	F	White	7	26	10	Yes	28	29	3	Medium	Medium	High	High	Moderate
+2115	76	F	White	1	14	0	No	8	24	5	Low	Low	Low	Medium	Severe
+2123	64	M	White	1	9	6	No	12	21	5	Low	Low	Medium	Low	Severe
+2131	34	M	White	3	19	8	No	10	30	NA	Low	Medium	Low	High	NA
+2132	60	M	White	1	23	16	Yes	11	28	2	Medium	High	Low	High	No or Mild
+2133	62	M	White	5	NA	NA	NA	NA	NA	1	NA	NA	NA	NA	No or Mild
+2137	52	F	White	7	29	19	No	26	10	3	High	High	High	Low	Moderate
+2139	48	F	White	3	30	12	No	20	28	2	High	Medium	High	High	No or Mild
+2141	NA	NA	NA	NA	NA	NA	NA	NA	0	2	NA	NA	NA	Low	No or Mild
+2142	58	F	White	1	26	12	No	14	21	1	Medium	Medium	Medium	Low	No or Mild
+2144	42	F	White	2	17	5	No	23	29	3	Low	Low	High	High	Moderate
+2147	69	F	White	1	19	13	Yes	15	22	1	Low	Medium	Medium	Low	No or Mild
+2149	60	F	White	7	21	6	No	21	25	3	Low	Low	High	Medium	Moderate
+2150	57	F	White	1	36	26	No	10	18	1	High	High	Low	Low	No or Mild
+2153	51	F	White	7	19	10	No	13	25	5	Low	Medium	Medium	Medium	Severe
+2155	62	F	White	1	28	29	No	17	24	5	High	High	High	Medium	Severe
+2156	49	F	White	3	10	0	No	3	33	2	Low	Low	Low	High	No or Mild
+2159	NA	NA	NA	NA	NA	NA	NA	NA	0	NA	NA	NA	NA	Low	NA
+3005	68	M	Black or African American	1	23	1	Yes	16	28	1	Medium	Low	Medium	High	No or Mild
+3008	67	F	White	1	13	1	Yes	8	26	1	Low	Low	Low	Medium	No or Mild
+3033	61	F	White	1	22	17	No	11	26	2	Medium	High	Low	Medium	No or Mild
+3038	71	M	White	1	26	23	No	21	23	4	Medium	High	High	Medium	Severe
+3040	55	F	White	1	39	11	No	25	26	2	High	Medium	High	Medium	No or Mild
+3045	71	F	White	1	24	10	Yes	16	23	1	Medium	Medium	Medium	Medium	No or Mild
+4005	62	M	White	1	22	15	No	20	32	3	Medium	High	High	High	Moderate
+4006	72	F	White	1	32	24	No	5	24	1	High	High	Low	Medium	No or Mild
+4020	65	M	White	1	NA	NA	NA	NA	NA	3	NA	NA	NA	NA	Moderate
+4032	63	M	White	1	23	13	No	31	19	NA	Medium	Medium	High	Low	NA
+2062	60	M	Black or African American	intimate partner	21	5	No	10	24	1	Low	Low	Low	Medium	No or Mild
+3027	63	M	White	spouse	15	2	No	11	31	4	Low	Low	Low	High	Severe

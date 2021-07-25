@@ -1,0 +1,356 @@
+---
+title: "Alpha/Beta Diversities"
+author: 
+  - Huang Lin$^1$
+  - $^1$Department of Biostatistics, University of Pittsburgh, 130 De Soto Street, Pittsburgh, PA 15261 USA
+date: '`r format(Sys.Date(), "%B %d, %Y")`'
+output:
+  html_document: 
+    toc: true
+    theme: united
+---
+
+```{r setup, include=FALSE}
+# rm(list = ls())
+
+knitr::opts_chunk$set(echo=TRUE, warning=FALSE, 
+                      message=FALSE, comment=NA, 
+                      fig.width = 6.25, fig.height = 5)
+
+library(readr)
+library(openxlsx)
+library(tidyverse) 
+library(microbiome)
+library(vegan)
+library(compositions)
+library(magrittr)
+library(qwraps2)
+library(knitr)
+library(kableExtra)
+options(digits = 2)
+```
+
+```{r data}
+# OTU table
+otu_table = read_tsv("../data/otu-table.tsv", skip = 1)
+otu_id = otu_table$`#OTU ID`
+otu_table = data.frame(otu_table[, -1], check.names = FALSE, row.names = otu_id)
+
+# Taxonomy table
+tax = read_tsv("../data/taxonomy.tsv")
+otu_id = tax$`Feature ID`
+tax = data.frame(tax[, - c(1, 3)], row.names = otu_id)
+tax = tax %>% separate(col = Taxon, 
+                       into = c("Kingdom", "Phylum", "Class", "Order", 
+                                "Family", "Genus", "Species"),
+                       sep = ";")
+for (i in 1:ncol(tax)) {
+  tax[, i] = sapply(tax[, i], function(x) str_split(x, "__")[[1]][2])
+}
+tax = as.matrix(tax)
+tax[tax == ""] = NA
+
+# Tree
+tree = read_tree("../data/tree.nwk")
+
+# Meta data
+meta_data = read_tsv("../data/metadata.tsv")
+meta_data = meta_data %>%
+  mutate_if(is.character, as.factor)
+meta_data$sampleid = as.character(meta_data$sampleid)
+meta_data$caregiver_stress_level = factor(meta_data$caregiver_stress_level,
+                                          levels = c("Low",  "Medium",  "High"))
+meta_data$depression_level = factor(meta_data$depression_level,
+                                    levels = c("Low",  "Medium",  "High"))
+meta_data$hostility_level = factor(meta_data$hostility_level,
+                                   levels = c("Low",  "Medium",  "High"))
+meta_data$das_level = factor(meta_data$das_level,
+                             levels = c("Low",  "Medium",  "High"))
+meta_data$metabolic_syndrome_level = factor(meta_data$metabolic_syndrome_level,
+                                            levels = c("No or Mild", 
+                                                       "Moderate", 
+                                                       "Severe"))
+
+OTU = otu_table(otu_table, taxa_are_rows = TRUE)
+META = sample_data(meta_data)
+sample_names(META) = meta_data$sampleid
+TAX = tax_table(tax)
+otu_data = phyloseq(OTU, TAX, META, tree)
+```
+
+# 1. Analyses at family level
+
+```{r}
+# Aggregate taxa
+family_data = aggregate_taxa(otu_data, "Family")
+family_rarefied = rarefy_even_depth(family_data, rngseed = 1, 
+                                    sample.size = 0.9 * min(sample_sums(family_data)), 
+                                    replace = FALSE)
+```
+
+## 1.1 Alpha diversity: Shannon’s diversity index
+
+*P-value is obtained by Kruskal-Wallis Rank Sum Test.*
+
+```{r}
+d_alpha = alpha(family_rarefied, index = "diversity_shannon")
+df_alpha = data.frame(d = d_alpha$diversity_shannon,
+                      meta(family_rarefied) %>% 
+                        dplyr::select(alcohol, 
+                                      caregiver_stress_level:metabolic_syndrome_level))
+covariates = colnames(df_alpha)[-1]
+labels = c("Alcohol Use", "Caregiver Stress Level", "Depression Level",
+           "Hostility Level", "DAS Level", "Metabolic Syndrome Level")
+
+for (i in seq_along(covariates)) {
+  cat("\n \n \n")
+  covariate = covariates[i]
+  label = labels[i]
+  tformula = formula(paste0("d ~ ", covariate)) 
+  p_val = kruskal.test(tformula, data = df_alpha)$p.value
+  df_ann = data.frame(x = 2.2, y = 1.01 * max(df_alpha$d), p = p_val)
+  df_ann = df_ann %>% 
+    mutate(label = paste0("p = ", signif(p, 2)))
+  
+  df_fig = df_alpha %>% 
+    transmute(x = !!as.name(covariate), y = d)
+  df_fig = df_fig[complete.cases(df_fig), ]
+  
+  p = df_fig %>%
+    ggplot(aes(x = x, y = y)) + 
+    geom_boxplot(aes(fill = x)) +
+    scale_fill_discrete(name = NULL) +
+    scale_y_continuous(limits = c(min(df_fig$y), 1.1 * max(df_fig$y))) + 
+    geom_jitter(shape = 16, position = position_jitter(0.2)) + 
+    geom_label(data = df_ann, aes(x = x, y = y, label = label),
+               size = 4, vjust = -0.5, hjust = 0, color = "orange") +
+    labs(x = NULL, y = "Shannon’s diversity index", title = label) + 
+    theme_bw() + 
+    theme(strip.background = element_rect(fill = "white"), 
+          legend.position = "bottom",
+          plot.title = element_text(hjust = 0.5))
+  print(p)
+  cat("\n \n \n")
+  fig_path1 = paste0("../images/diversity/alpha_family_", covariate, ".jpeg")
+  fig_path2 = paste0("../images/diversity/alpha_family_", covariate, ".pdf")
+  ggsave(filename = fig_path1, plot = p, height = 5, width = 6.25, 
+         units = 'in', dpi = 300) 
+  ggsave(filename = fig_path2, plot = p, height = 5, width = 6.25) 
+}
+```
+
+## 1.2 Beta diversity: Bray-Curtis dissimilarity
+
+*P-values are obtained by Permutational Multivariate Analysis of Variance (PERMANOVA) and Permutational Analysis of Multivariate Dispersion (PERMDISP).*
+
+```{r}
+for (i in seq_along(covariates)) {
+  cat("\n \n \n")
+  covariate = covariates[i]
+  label = labels[i]
+  pseq = family_rarefied
+  sample_data(pseq)$covariate = meta(pseq)[, covariate]
+  pseq_subset = subset_samples(pseq, !is.na(covariate))
+  
+  set.seed(123)
+  # PERMANOVA
+  permanova = adonis(t(abundances(pseq_subset)) ~ covariate, 
+                     data = meta(pseq_subset), 
+                     permutations = 999, method = "bray")$aov.tab
+  # PERMDISP
+  dis = vegdist(t(abundances(pseq_subset)), method = "bray")
+  groups = sample_data(pseq_subset)$covariate
+  mod = betadisper(d = dis, group = groups, type = "median")
+
+  # Draw the Plot
+  labs = paste0("PCoA", 1:2, " (", signif(100 * mod$eig / sum(mod$eig), 3), "%)")
+  # brewer.pal(n = 8, name = "Accent")
+  plot(mod, pch = 15:16, cex.lab = 1.25, cex = 1, 
+       main = label, 
+       xlab = labs[1], ylab = labs[2], ylim = c(-0.4, 0.6), xaxt = "n",
+       col = c("#7FC97F", "#BEAED4"), sub = NULL,
+       hull = FALSE, ellipse = TRUE, conf = 0.68) # 68% data coverage for data ellipses
+  axis(1, at = round(seq(-0.6, 0.6, by = 0.2), 1), las = 1)
+  legend(x = 0.5, y = 0.2, legend = unique(groups),
+         col = c("#7FC97F", "#BEAED4"), pch = 15:16, cex = 0.8)
+  legend(x = 0.2, y = 0.6, cex = 0.7,
+         legend = c(paste0("p (PERMANOVA) = ", signif(permanova$`Pr(>F)`[1], 2)),
+                    paste0("p (PERMDISP) = ", signif(permutest(mod)$tab$`Pr(>F)`[1], 2))))
+  cat("\n \n \n")
+  # Export
+  fig_path1 = paste0("../images/diversity/beta_family_", covariate, ".jpeg")
+  jpeg(filename = fig_path1, height = 5, width = 6.25, res = 300, units = "in")
+  plot(mod, pch = 15:16, cex.lab = 1.25, cex = 1, 
+       main = label, 
+       xlab = labs[1], ylab = labs[2], ylim = c(-0.4, 0.6), xaxt = "n",
+       col = c("#7FC97F", "#BEAED4"), sub = NULL,
+       hull = FALSE, ellipse = TRUE, conf = 0.68) # 68% data coverage for data ellipses
+  axis(1, at = round(seq(-0.6, 0.6, by = 0.2), 1), las = 1)
+  legend(x = 0.5, y = 0.2, legend = unique(groups),
+         col = c("#7FC97F", "#BEAED4"), pch = 15:16, cex = 0.8)
+  legend(x = 0.2, y = 0.6, cex = 0.7,
+         legend = c(paste0("p (PERMANOVA) = ", signif(permanova$`Pr(>F)`[1], 2)),
+                    paste0("p (PERMDISP) = ", signif(permutest(mod)$tab$`Pr(>F)`[1], 2))))
+  dev.off()
+  
+  fig_path2 = paste0("../images/diversity/beta_family_", covariate, ".pdf")
+  pdf(file = fig_path2, height = 5, width = 6.25)
+  plot(mod, pch = 15:16, cex.lab = 1.25, cex = 1, 
+       main = label, 
+       xlab = labs[1], ylab = labs[2], ylim = c(-0.4, 0.6), xaxt = "n",
+       col = c("#7FC97F", "#BEAED4"), sub = NULL,
+       hull = FALSE, ellipse = TRUE, conf = 0.68) # 68% data coverage for data ellipses
+  axis(1, at = round(seq(-0.6, 0.6, by = 0.2), 1), las = 1)
+  legend(x = 0.5, y = 0.2, legend = unique(groups),
+         col = c("#7FC97F", "#BEAED4"), pch = 15:16, cex = 0.8)
+  legend(x = 0.2, y = 0.6, cex = 0.7,
+         legend = c(paste0("p (PERMANOVA) = ", signif(permanova$`Pr(>F)`[1], 2)),
+                    paste0("p (PERMDISP) = ", signif(permutest(mod)$tab$`Pr(>F)`[1], 2))))
+  dev.off()
+}
+```
+
+# 2. Analyses at genus level
+
+```{r}
+# Aggregate taxa
+genus_data = aggregate_taxa(otu_data, "Genus")
+genus_rarefied = rarefy_even_depth(genus_data, rngseed = 1, 
+                                   sample.size = 0.9 * min(sample_sums(family_data)), 
+                                   replace = FALSE)
+```
+
+## 2.1 Alpha diversity: Shannon’s diversity index
+
+*P-value is obtained by Kruskal-Wallis Rank Sum Test.*
+
+```{r}
+d_alpha = alpha(genus_rarefied, index = "diversity_shannon")
+df_alpha = data.frame(d = d_alpha$diversity_shannon,
+                      meta(genus_rarefied) %>% 
+                        dplyr::select(alcohol, 
+                                      caregiver_stress_level:metabolic_syndrome_level))
+covariates = colnames(df_alpha)[-1]
+labels = c("Alcohol Use", "Caregiver Stress Level", "Depression Level",
+           "Hostility Level", "DAS Level", "Metabolic Syndrome Level")
+
+for (i in seq_along(covariates)) {
+  cat("\n \n \n")
+  covariate = covariates[i]
+  label = labels[i]
+  tformula = formula(paste0("d ~ ", covariate)) 
+  p_val = kruskal.test(tformula, data = df_alpha)$p.value
+  df_ann = data.frame(x = 2.2, y = 1.01 * max(df_alpha$d), p = p_val)
+  df_ann = df_ann %>% 
+    mutate(label = paste0("p = ", signif(p, 2)))
+  
+  df_fig = df_alpha %>% 
+    transmute(x = !!as.name(covariate), y = d)
+  df_fig = df_fig[complete.cases(df_fig), ]
+  
+  p = df_fig %>%
+    ggplot(aes(x = x, y = y)) + 
+    geom_boxplot(aes(fill = x)) +
+    scale_fill_discrete(name = NULL) +
+    scale_y_continuous(limits = c(min(df_fig$y), 1.1 * max(df_fig$y))) + 
+    geom_jitter(shape = 16, position = position_jitter(0.2)) + 
+    geom_label(data = df_ann, aes(x = x, y = y, label = label),
+               size = 4, vjust = -0.5, hjust = 0, color = "orange") +
+    labs(x = NULL, y = "Shannon’s diversity index", title = label) + 
+    theme_bw() + 
+    theme(strip.background = element_rect(fill = "white"), 
+          legend.position = "bottom",
+          plot.title = element_text(hjust = 0.5))
+  print(p)
+  cat("\n \n \n")
+  fig_path1 = paste0("../images/diversity/alpha_genus_", covariate, ".jpeg")
+  fig_path2 = paste0("../images/diversity/alpha_genus_", covariate, ".pdf")
+  ggsave(filename = fig_path1, plot = p, height = 5, width = 6.25, 
+         units = 'in', dpi = 300) 
+  ggsave(filename = fig_path2, plot = p, height = 5, width = 6.25) 
+}
+```
+
+## 2.2 Beta diversity: Bray-Curtis dissimilarity
+
+*P-values are obtained by Permutational Multivariate Analysis of Variance (PERMANOVA) and Permutational Analysis of Multivariate Dispersion (PERMDISP).*
+
+```{r}
+for (i in seq_along(covariates)) {
+  cat("\n \n \n")
+  covariate = covariates[i]
+  label = labels[i]
+  pseq = genus_rarefied
+  sample_data(pseq)$covariate = meta(pseq)[, covariate]
+  pseq_subset = subset_samples(pseq, !is.na(covariate))
+  
+  set.seed(123)
+  # PERMANOVA
+  permanova = adonis(t(abundances(pseq_subset)) ~ covariate, 
+                     data = meta(pseq_subset), 
+                     permutations = 999, method = "bray")$aov.tab
+  # PERMDISP
+  dis = vegdist(t(abundances(pseq_subset)), method = "bray")
+  groups = sample_data(pseq_subset)$covariate
+  mod = betadisper(d = dis, group = groups, type = "median")
+
+  # Draw the Plot
+  labs = paste0("PCoA", 1:2, " (", signif(100 * mod$eig / sum(mod$eig), 3), "%)")
+  # brewer.pal(n = 8, name = "Accent")
+  plot(mod, pch = 15:16, cex.lab = 1.25, cex = 1, 
+       main = label, 
+       xlab = labs[1], ylab = labs[2], ylim = c(-0.4, 0.6), xaxt = "n",
+       col = c("#7FC97F", "#BEAED4"), sub = NULL,
+       hull = FALSE, ellipse = TRUE, conf = 0.68) # 68% data coverage for data ellipses
+  axis(1, at = round(seq(-0.6, 0.6, by = 0.2), 1), las = 1)
+  legend(x = 0.5, y = 0.2, legend = unique(groups),
+         col = c("#7FC97F", "#BEAED4"), pch = 15:16, cex = 0.8)
+  legend(x = 0.2, y = 0.6, cex = 0.7,
+         legend = c(paste0("p (PERMANOVA) = ", signif(permanova$`Pr(>F)`[1], 2)),
+                    paste0("p (PERMDISP) = ", signif(permutest(mod)$tab$`Pr(>F)`[1], 2))))
+  cat("\n \n \n")
+  # Export
+  fig_path1 = paste0("../images/diversity/beta_genus_", covariate, ".jpeg")
+  jpeg(filename = fig_path1, height = 5, width = 6.25, res = 300, units = "in")
+  plot(mod, pch = 15:16, cex.lab = 1.25, cex = 1, 
+       main = label, 
+       xlab = labs[1], ylab = labs[2], ylim = c(-0.4, 0.6), xaxt = "n",
+       col = c("#7FC97F", "#BEAED4"), sub = NULL,
+       hull = FALSE, ellipse = TRUE, conf = 0.68) # 68% data coverage for data ellipses
+  axis(1, at = round(seq(-0.6, 0.6, by = 0.2), 1), las = 1)
+  legend(x = 0.5, y = 0.2, legend = unique(groups),
+         col = c("#7FC97F", "#BEAED4"), pch = 15:16, cex = 0.8)
+  legend(x = 0.2, y = 0.6, cex = 0.7,
+         legend = c(paste0("p (PERMANOVA) = ", signif(permanova$`Pr(>F)`[1], 2)),
+                    paste0("p (PERMDISP) = ", signif(permutest(mod)$tab$`Pr(>F)`[1], 2))))
+  dev.off()
+  
+  fig_path2 = paste0("../images/diversity/beta_genus_", covariate, ".pdf")
+  pdf(file = fig_path2, height = 5, width = 6.25)
+  plot(mod, pch = 15:16, cex.lab = 1.25, cex = 1, 
+       main = label, 
+       xlab = labs[1], ylab = labs[2], ylim = c(-0.4, 0.6), xaxt = "n",
+       col = c("#7FC97F", "#BEAED4"), sub = NULL,
+       hull = FALSE, ellipse = TRUE, conf = 0.68) # 68% data coverage for data ellipses
+  axis(1, at = round(seq(-0.6, 0.6, by = 0.2), 1), las = 1)
+  legend(x = 0.5, y = 0.2, legend = unique(groups),
+         col = c("#7FC97F", "#BEAED4"), pch = 15:16, cex = 0.8)
+  legend(x = 0.2, y = 0.6, cex = 0.7,
+         legend = c(paste0("p (PERMANOVA) = ", signif(permanova$`Pr(>F)`[1], 2)),
+                    paste0("p (PERMDISP) = ", signif(permutest(mod)$tab$`Pr(>F)`[1], 2))))
+  dev.off()
+}
+```
+
+# Session information
+
+```{r, message = FALSE, warning = FALSE, comment = NA}
+sessionInfo()
+```
+
+
+
+
+
+
+

@@ -1,0 +1,176 @@
+---
+title: "Data Summary"
+author: 
+  - Huang Lin$^1$
+  - $^1$Department of Biostatistics, University of Pittsburgh, 130 De Soto Street, Pittsburgh, PA 15261 USA
+date: '`r format(Sys.Date(), "%B %d, %Y")`'
+output:
+  html_document: 
+    toc: true
+    theme: united
+---
+
+```{r setup, include=FALSE}
+# rm(list = ls())
+
+knitr::opts_chunk$set(echo=TRUE, warning=FALSE, 
+                      message=FALSE, comment=NA, 
+                      fig.width = 6.25, fig.height = 5)
+
+library(readr)
+library(openxlsx)
+library(tidyverse) 
+library(microbiome)
+library(vegan)
+library(compositions)
+library(magrittr)
+library(qwraps2)
+library(knitr)
+library(kableExtra)
+options(digits = 2)
+```
+
+```{r data}
+# OTU table
+otu_table = read_tsv("../data/otu-table.tsv", skip = 1)
+otu_id = otu_table$`#OTU ID`
+otu_table = data.frame(otu_table[, -1], check.names = FALSE, row.names = otu_id)
+
+# Taxonomy table
+tax = read_tsv("../data/taxonomy.tsv")
+otu_id = tax$`Feature ID`
+tax = data.frame(tax[, - c(1, 3)], row.names = otu_id)
+tax = tax %>% separate(col = Taxon, 
+                       into = c("Kingdom", "Phylum", "Class", "Order", 
+                                "Family", "Genus", "Species"),
+                       sep = ";")
+for (i in 1:ncol(tax)) {
+  tax[, i] = sapply(tax[, i], function(x) str_split(x, "__")[[1]][2])
+}
+tax = as.matrix(tax)
+tax[tax == ""] = NA
+
+# Tree
+tree = read_tree("../data/tree.nwk")
+
+# Meta data
+meta_data = read_tsv("../data/metadata.tsv")
+meta_data = meta_data %>%
+  mutate_if(is.character, as.factor)
+meta_data$sampleid = as.character(meta_data$sampleid)
+meta_data$caregiver_stress_level = factor(meta_data$caregiver_stress_level,
+                                          levels = c("Low",  "Medium",  "High"))
+meta_data$depression_level = factor(meta_data$depression_level,
+                                    levels = c("Low",  "Medium",  "High"))
+meta_data$hostility_level = factor(meta_data$hostility_level,
+                                   levels = c("Low",  "Medium",  "High"))
+meta_data$das_level = factor(meta_data$das_level,
+                             levels = c("Low",  "Medium",  "High"))
+meta_data$metabolic_syndrome_level = factor(meta_data$metabolic_syndrome_level,
+                                            levels = c("No or Mild", 
+                                                       "Moderate", 
+                                                       "Severe"))
+
+OTU = otu_table(otu_table, taxa_are_rows = TRUE)
+META = sample_data(meta_data)
+sample_names(META) = meta_data$sampleid
+TAX = tax_table(tax)
+otu_data = phyloseq(OTU, TAX, META, tree)
+```
+
+# 1. Data summary
+
+```{r}
+options(qwraps2_markup = "markdown")
+summary_template =
+  list("Age" = 
+         list("Min" = ~ min(age, na.rm = TRUE),
+              "Max" = ~ max(age, na.rm = TRUE),
+              "Mean (SD)" = ~ qwraps2::mean_sd(age, na_rm = TRUE)),
+       "Stress" = 
+         list("Min" = ~ min(caregiver_stress, na.rm = TRUE),
+              "Max" = ~ max(caregiver_stress, na.rm = TRUE),
+              "Mean (SD)" = ~ qwraps2::mean_sd(caregiver_stress, na_rm = TRUE)),
+       "Depression" = 
+         list("Min" = ~ min(depression, na.rm = TRUE),
+              "Max" = ~ max(depression, na.rm = TRUE),
+              "Mean (SD)" = ~ qwraps2::mean_sd(depression, na_rm = TRUE)),
+       "Hostility" = 
+         list("Min" = ~ min(hostility, na.rm = TRUE),
+              "Max" = ~ max(hostility, na.rm = TRUE),
+              "Mean (SD)" = ~ qwraps2::mean_sd(hostility, na_rm = TRUE)),
+       "DAS" = 
+         list("Min" = ~ min(das, na.rm = TRUE),
+              "Max" = ~ max(das, na.rm = TRUE),
+              "Mean (SD)" = ~ qwraps2::mean_sd(das, na_rm = TRUE)),
+       "Metabolic Syndrome" = 
+         list("Min" = ~ min(metabolic_syndrome, na.rm = TRUE),
+              "Max" = ~ max(metabolic_syndrome, na.rm = TRUE),
+              "Mean (SD)" = ~ qwraps2::mean_sd(metabolic_syndrome, na_rm = TRUE)),
+       "Gender" =
+         list("F" = ~ n_perc0(gender == "F", na_rm = TRUE),
+              "M" = ~ n_perc0(gender == "M", na_rm = TRUE)),
+       "Race" =
+         list("Caucasian" = ~ n_perc0(race == "White", na_rm = TRUE),
+              "Non-Caucasian" = ~ n_perc0(race != "White", na_rm = TRUE)),
+       "Relation" = 
+         list("Spouse" = ~ n_perc0(relation %in% c(1, "spouse"), na_rm = TRUE),
+              "Intimate partner" = ~ n_perc0(relation %in% c(2, "intimate partner"), 
+                                             na_rm = TRUE),
+              "Adult child" = ~ n_perc0(relation == 3, na_rm = TRUE),
+              "Siblings" = ~ n_perc0(relation == 4, na_rm = TRUE),
+              "Friends" = ~ n_perc0(relation == 5, na_rm = TRUE),
+              "Neighbor" = ~ n_perc0(relation == 6, na_rm = TRUE),
+              "Other" = ~ n_perc0(relation == 7, na_rm = TRUE)),
+       "Alcohol Use" =
+         list("No" = ~ n_perc0(alcohol == "No", na_rm = TRUE),
+              "Yes" = ~ n_perc0(alcohol == "Yes", na_rm = TRUE),
+              "NA" = ~ n_perc0(is.na(alcohol), na_rm = TRUE)),
+       "Stress Level" =
+         list("Low" = ~ n_perc0(caregiver_stress_level == "Low", na_rm = TRUE),
+              "Medium" = ~ n_perc0(caregiver_stress_level == "Medium", na_rm = TRUE),
+              "High" = ~ n_perc0(caregiver_stress_level == "High", na_rm = TRUE),
+              "NA" = ~ n_perc0(is.na(caregiver_stress_level), na_rm = TRUE)),
+       "Depression Level" =
+         list("Low" = ~ n_perc0(depression_level == "Low", na_rm = TRUE),
+              "Medium" = ~ n_perc0(depression_level == "Medium", na_rm = TRUE),
+              "High" = ~ n_perc0(depression_level == "High", na_rm = TRUE),
+              "NA" = ~ n_perc0(is.na(depression_level), na_rm = TRUE)),
+       "Hostility Level" =
+         list("Low" = ~ n_perc0(hostility_level == "Low", na_rm = TRUE),
+              "Medium" = ~ n_perc0(hostility_level == "Medium", na_rm = TRUE),
+              "High" = ~ n_perc0(hostility_level == "High", na_rm = TRUE),
+              "NA" = ~ n_perc0(is.na(hostility_level), na_rm = TRUE)),
+       "DAS Level" =
+         list("Low" = ~ n_perc0(das_level == "Low", na_rm = TRUE),
+              "Medium" = ~ n_perc0(das_level == "Medium", na_rm = TRUE),
+              "High" = ~ n_perc0(das_level == "High", na_rm = TRUE),
+              "NA" = ~ n_perc0(is.na(das_level), na_rm = TRUE)),
+       "Metabolic Syndrome Level" =
+         list("No or Mild" = ~ n_perc0(metabolic_syndrome_level == "No or Mild", na_rm = TRUE),
+              "Moderate" = ~ n_perc0(metabolic_syndrome_level == "Moderate", na_rm = TRUE),
+              "Severe" = ~ n_perc0(metabolic_syndrome_level == "Severe", na_rm = TRUE),
+              "NA" = ~ n_perc0(is.na(metabolic_syndrome_level), na_rm = TRUE))
+  )
+```
+
+```{r, results='asis'}
+# Summary tables
+overall_tab = summary_table(meta(otu_data), summary_template)
+overall_tab
+```
+
+# Session information
+
+```{r, message = FALSE, warning = FALSE, comment = NA}
+sessionInfo()
+```
+
+
+
+
+
+
+
+
+
