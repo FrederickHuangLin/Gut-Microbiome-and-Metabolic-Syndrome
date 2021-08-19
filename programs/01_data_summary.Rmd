@@ -13,8 +13,8 @@ output:
 ```{r setup, include=FALSE}
 # rm(list = ls())
 
-knitr::opts_chunk$set(echo=TRUE, warning=FALSE, 
-                      message=FALSE, comment=NA, 
+knitr::opts_chunk$set(echo = TRUE, warning = FALSE, 
+                      message = FALSE, comment = NA, 
                       fig.width = 6.25, fig.height = 5)
 
 library(readr)
@@ -67,9 +67,7 @@ meta_data$hostility_level = factor(meta_data$hostility_level,
 meta_data$das_level = factor(meta_data$das_level,
                              levels = c("Low",  "Medium",  "High"))
 meta_data$metabolic_syndrome_level = factor(meta_data$metabolic_syndrome_level,
-                                            levels = c("No or Mild", 
-                                                       "Moderate", 
-                                                       "Severe"))
+                                            levels = c("Low",  "Medium",  "High"))
 
 OTU = otu_table(otu_table, taxa_are_rows = TRUE)
 META = sample_data(meta_data)
@@ -147,9 +145,9 @@ summary_template =
               "High" = ~ n_perc0(das_level == "High", na_rm = TRUE),
               "NA" = ~ n_perc0(is.na(das_level), na_rm = TRUE)),
        "Metabolic Syndrome Level" =
-         list("No or Mild" = ~ n_perc0(metabolic_syndrome_level == "No or Mild", na_rm = TRUE),
-              "Moderate" = ~ n_perc0(metabolic_syndrome_level == "Moderate", na_rm = TRUE),
-              "Severe" = ~ n_perc0(metabolic_syndrome_level == "Severe", na_rm = TRUE),
+         list("Low" = ~ n_perc0(metabolic_syndrome_level == "Low", na_rm = TRUE),
+              "Medium" = ~ n_perc0(metabolic_syndrome_level == "Medium", na_rm = TRUE),
+              "High" = ~ n_perc0(metabolic_syndrome_level == "High", na_rm = TRUE),
               "NA" = ~ n_perc0(is.na(metabolic_syndrome_level), na_rm = TRUE))
   )
 ```

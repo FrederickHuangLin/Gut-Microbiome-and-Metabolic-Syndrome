@@ -13,24 +13,16 @@ output:
 ```{r setup, include=FALSE}
 # rm(list = ls())
 
-knitr::opts_chunk$set(echo=TRUE, warning=FALSE, 
-                      message=FALSE, comment=NA, 
+knitr::opts_chunk$set(echo = TRUE, warning = FALSE, 
+                      message = FALSE, comment = NA, 
                       fig.width = 6.25, fig.height = 5)
 
 library(readr)
 library(openxlsx)
 library(tidyverse) 
 library(microbiome)
-library(vegan)
-library(compositions)
-library(magrittr)
-library(qwraps2)
-library(knitr)
 library(RColorBrewer)
-library(kableExtra)
-options(digits = 2)
-
-source("00_ancom_bc.R")
+library(ANCOMBC)
 ```
 
 ```{r data}
@@ -70,9 +62,7 @@ meta_data$hostility_level = factor(meta_data$hostility_level,
 meta_data$das_level = factor(meta_data$das_level,
                              levels = c("Low",  "Medium",  "High"))
 meta_data$metabolic_syndrome_level = factor(meta_data$metabolic_syndrome_level,
-                                            levels = c("No or Mild", 
-                                                       "Moderate", 
-                                                       "Severe"))
+                                            levels = c("Low",  "Medium",  "High"))
 
 OTU = otu_table(otu_table, taxa_are_rows = TRUE)
 META = sample_data(meta_data)
@@ -81,107 +71,302 @@ TAX = tax_table(tax)
 otu_data = phyloseq(OTU, TAX, META, tree)
 ```
 
-```{r}
-pipeline = function(pseq, sample_id, adj_formula, group){
-  feature_table = abundances(pseq)
-  meta_data = meta(pseq)
+```{r function1}
+two_group_pipeline = function(pseq, adj_formula, group){
+  out = ancombc(phyloseq = pseq, formula = adj_formula,
+                p_adj_method = "BH", zero_cut = 0.90, lib_cut = 1000,
+                group = group, struc_zero = TRUE, neg_lb = FALSE,
+                tol = 1e-5, max_iter = 100, conserve = TRUE,
+                alpha = 0.05, global = FALSE)
+  res = out$res
   
-  p_adj_method = "BH"; zero_cut = 0.90; lib_cut = 1000
-  struc_zero = TRUE; neg_lb = FALSE; tol = 1e-5
-  max_iter = 100; conserve = FALSE; alpha = 0.05
-  per_num = 1000; global = FALSE; direct = TRUE
-  dunnett = FALSE; pattern = NULL
-  out = ANCOM_BC(feature_table, meta_data, sample_id, adj_formula, p_adj_method, 
-                 zero_cut, lib_cut, struc_zero, neg_lb, group, tol, max_iter, 
-                 conserve, alpha, per_num, global, direct, dunnett, pattern)
+  # =============================== Results summary ============================
+  res_beta = res$beta %>% 
+    rownames_to_column("taxon_id")
+  res_se = res$se %>% 
+    rownames_to_column("taxon_id")
+  res_W = res$W %>% 
+    rownames_to_column("taxon_id")
+  res_p = res$p %>% 
+    rownames_to_column("taxon_id")
+  res_q = res$q %>% 
+    rownames_to_column("taxon_id")
+  res_zero = data.frame(out$zero_ind, check.names = FALSE) %>% 
+    rownames_to_column("taxon_id")
   
-  if(is.null(out$res_direct)) {
-    res = out$res
-  } else {
-    res = out$res_direct
-  }
-  res_beta = data.frame(res$beta * res$diff_abn, check.names = FALSE) %>% 
+  zero_mask = out$zero_ind - out$zero_ind[, 1]
+  zero_mask = abs(zero_mask[, -1, drop = FALSE])
+  zero_mask = data.frame(zero_mask, check.names = FALSE) %>% 
     rownames_to_column("taxon_id")
-  res_se = data.frame(res$se * res$diff_abn, check.names = FALSE) %>% 
-    rownames_to_column("taxon_id")
-  colnames(res_se)[-1] = paste0(colnames(res_se)[-1], "SD")
+  
+  # Coerce the SE of structural zero to be zero
+  res_se[, grepl(group, colnames(res_se))] = res_se[, grepl(group, colnames(res_se))] *
+    (1 - zero_mask[, grepl(group, colnames(zero_mask))])
+  
+  res_final = list(res_beta, res_se, res_W, res_p, res_q, res_zero) %>%
+    reduce(left_join, by = "taxon_id") %>%
+    mutate_if(is.numeric, function(x) signif(x, 3))
+  
+  level_ch = levels(as.factor(meta(pseq)[, group]))
+  col_label = paste0(level_ch[-1], " - ", level_ch[1])
+  colnames(res_final)[2:6] = c(paste0("lfc (", col_label, ")"),
+                               paste0("se (", col_label, ")"),
+                               paste0("W (", col_label, ")"),
+                               paste0("p (", col_label, ")"),
+                               paste0("q (", col_label, ")"))
+
+  # =============================== Waterfall plot =============================
+  res_beta = res_beta %>%
+    pivot_longer(cols = -taxon_id, names_to = "var", values_to = "lfc")
+  res_se = res_se %>%
+    pivot_longer(cols = -taxon_id, names_to = "var", values_to = "se")
+  res_p = res_p %>%
+    pivot_longer(cols = -taxon_id, names_to = "var", values_to = "p")
+  res_q = res_q %>%
+    pivot_longer(cols = -taxon_id, names_to = "var", values_to = "q")
+  
   res_model = res_beta %>% 
-    left_join(res_se, by = "taxon_id") %>%
-    dplyr::select(-matches("Intercept"))
+    left_join(res_se, by = c("taxon_id", "var")) %>%
+    left_join(res_p, by = c("taxon_id", "var")) %>%
+    left_join(res_q, by = c("taxon_id", "var"))
   
-  # Heatmap
-  df_fig = res_beta %>% 
-    dplyr::select(-matches("Intercept"))
-  level_ch = levels(as.factor(meta_data[, group]))
-  col_label = outer(level_ch, level_ch, function(x, y) paste0(x, " - ", y))
-  col_label = col_label[lower.tri(col_label)]
-  colnames(df_fig) = c("taxon_id", col_label)
-  df_fig_long = df_fig %>% 
-    gather(key = "key", value = "value", -taxon_id)
-  df_fig_long$taxon_id = factor(df_fig_long$taxon_id)
+  # Waterfall plot for the covariate of interest
+  df_fig1 = res_model %>%
+    filter(grepl(group, var),
+           q < .05) %>%
+    arrange(desc(lfc)) %>%
+    mutate(type = if_else(lfc > 0, "g1", "g2"),
+           star = case_when(p < .001 ~ "***",
+                            p < .01 ~ "**",
+                            TRUE ~ "*"),
+           pos = if_else(type == "g1", 
+                         lfc + se + 0.2,
+                         lfc - se - 0.2)
+    )
+  df_fig1$taxon_id = factor(df_fig1$taxon_id, 
+                            levels = unique(df_fig1$taxon_id))
+  df_fig1$type = factor(df_fig1$type, levels = c("g1", "g2"))
   
-  p_heat = df_fig_long %>%
-    ggplot(aes(x = key, y = taxon_id)) +
-    scale_x_discrete(expand = c(0, 0)) + 
-    labs(x = NULL, y = NULL, fill = "Log fold change") + 
-    geom_tile(aes(fill = value)) + 
-    scale_fill_gradient2(low = "blue", mid = "white", high = "red") +
-    theme_bw() +
-    theme(axis.text.x = element_text(angle = 60, hjust = 1))
+  if (nrow(df_fig1) != 0) {
+    p_waterfall = df_fig1 %>%
+      ggplot(aes(x = taxon_id, y = lfc, 
+                 fill = type, color = type)) + 
+      geom_bar(stat = "identity", width = 0.7, 
+               position = position_dodge(width = 0.4)) +
+      geom_errorbar(aes(ymin = lfc - se, ymax = lfc + se), 
+                    width = 0.2, position = position_dodge(0.05), color = "black") + 
+      geom_text(aes(y = pos, label = star), 
+                vjust = .7, color = "black", 
+                position = position_dodge(width = 0.05)) +
+      labs(x = NULL, y = "Log fold change") +
+      scale_fill_brewer(palette = "Set1",
+                        name = NULL, drop = FALSE,
+                        label = c("g1" = "Positive LFC",
+                                  "g2" = "Negative LFC")) +
+      scale_color_brewer(palette = "Set1", drop = FALSE) +
+      guides(color = "none") +
+      theme_bw() + 
+      theme(panel.grid.minor.y = element_blank(),
+            axis.text.x = element_text(size = 12, face = "bold",
+                                       angle = 60, hjust = 1))
+  } else {p_waterfall = NULL}
   
-  # Relative abundance plot
-  df_fig_long = data.frame(t(abundances(pseq)), check.names = FALSE) %>% 
-    rownames_to_column(sample_id) %>%
-    pivot_longer(-sample_id, names_to = "taxon", values_to = "value") %>%
-    left_join(meta_data %>% 
-                dplyr::select(sample_id, group))
-  colnames(df_fig_long)[ncol(df_fig_long)] = "group"
+  # =============================== Relative abundance plot =============================== 
+  sig_taxa = as.character(df_fig1$taxon_id)
   
-  df_fig_wide = df_fig_long %>%
-    filter(!is.na(group)) %>%
-    group_by(group, taxon) %>%
-    summarise(value = sum(value)) %>%
-    pivot_wider(id_cols = "taxon",
-                names_from = "group",
-                values_from = "value") %>%
-    mutate(total = rowSums(select_if(., is.numeric))) %>%
-    mutate_if(is.numeric, function(x) 100 * x/sum(x)) %>%
-    mutate(taxon = case_when(
-      taxon == "Unknown" ~ "Others",
-      total < 2 ~ "Others",
-      TRUE ~ taxon)) %>%
-    group_by(taxon) %>%
-    summarise_all(sum)
+  if (length(sig_taxa) == 0) {
+    p_rel = NULL
+  } else {
+    rel_table = pseq %>%
+      microbiome::transform(transform = "compositional")
+    
+    df_fig2 = data.frame(t(abundances(rel_table)[sig_taxa, , drop = FALSE]), 
+                         check.names = FALSE) %>%
+      rownames_to_column("sampleid") %>% 
+      left_join(meta(pseq), by = "sampleid") %>%
+      dplyr::select(!!as.name(group), sig_taxa) %>% 
+      filter(!is.na(!!as.name(group))) %>%
+      group_by(!!as.name(group)) %>% 
+      summarise_all(mean)
+    
+    df_fig2_long = df_fig2 %>% 
+      pivot_longer(cols = -!!as.name(group), 
+                   names_to = "taxon",
+                   values_to = "value") %>%
+      mutate(value = 100 * value)
+    df_fig2_long$taxon = factor(df_fig2_long$taxon, 
+                                levels = unique(sig_taxa))
+    
+    p_rel = df_fig2_long %>%
+      ggplot(aes(x = !!as.name(group), y = value, 
+                 fill = !!as.name(group))) +
+      geom_col(position = position_stack()) + 
+      facet_wrap(.~ taxon, scales = "free_y") +
+      scale_fill_discrete(name = NULL, drop =) +
+      labs(x = NULL, y = "Relative abundance (%)") + 
+      theme_bw() + 
+      theme(strip.background = element_rect(fill = "white"),
+            axis.text.x = element_blank(),
+            axis.ticks.x = element_blank())
+  }
   
-  df_fig = df_fig_wide %>%
-    dplyr::select(-total) %>%
-    pivot_longer(-taxon, names_to = "group", values_to = "value")
-  df_fig$taxon = forcats::fct_relevel(df_fig$taxon, "Others", after = Inf)
-  
-  p_rel = df_fig %>%
-    ggplot(aes(x = group, y = value, fill = taxon)) +
-    geom_col(position = position_stack(), color = "black") + 
-    labs(x = NULL, y = "Relative abundance (%)") + 
-    theme_bw() +
-    scale_fill_discrete(name = NULL) +
-    theme(legend.position = "right",
-          axis.ticks.x = element_blank(),
-          panel.grid.minor = element_blank(),
-          panel.grid.major = element_blank(),
-          strip.background = element_rect(fill="white"))
-  
-  obj = list(out = res_model, p_heat = p_heat, p_rel = p_rel)
+  obj = list(p_waterfall = p_waterfall, p_rel = p_rel, out = res_final)
   return(obj)
 }
 ```
 
-# 1. Analyses at family level
+```{r function2}
+multi_group_pipeline = function(pseq, adj_formula, group){
+  out = ancombc(phyloseq = pseq, formula = adj_formula,
+                p_adj_method = "BH", zero_cut = 0.90, lib_cut = 1000,
+                group = group, struc_zero = TRUE, neg_lb = FALSE,
+                tol = 1e-5, max_iter = 100, conserve = TRUE,
+                alpha = 0.05, global = FALSE)
+  res = out$res
+  
+  # =============================== Results summary ============================
+  res_beta = res$beta %>% 
+    rownames_to_column("taxon_id")
+  res_se = res$se %>% 
+    rownames_to_column("taxon_id")
+  res_W = res$W %>% 
+    rownames_to_column("taxon_id")
+  res_p = res$p %>% 
+    rownames_to_column("taxon_id")
+  res_q = res$q %>% 
+    rownames_to_column("taxon_id")
+  res_zero = data.frame(out$zero_ind, check.names = FALSE) %>% 
+    rownames_to_column("taxon_id")
+  
+  zero_mask = out$zero_ind - out$zero_ind[, 1]
+  zero_mask = abs(zero_mask[, -1, drop = FALSE])
+  zero_mask = data.frame(zero_mask, check.names = FALSE) %>% 
+    rownames_to_column("taxon_id")
+  
+  # Coerce the SE of structural zero to be zero
+  res_se[, grepl(group, colnames(res_se))] = res_se[, grepl(group, colnames(res_se))] *
+    (1 - zero_mask[, grepl(group, colnames(zero_mask))])
+  
+  res_final = list(res_beta, res_se, res_W, res_p, res_q, res_zero) %>%
+    reduce(left_join, by = "taxon_id") %>%
+    mutate_if(is.numeric, function(x) signif(x, 3))
+  
+  level_ch = levels(as.factor(meta(pseq)[, group]))
+  col_label = paste0(level_ch[-1], " - ", level_ch[1])
+  colnames(res_final)[2:11] = c(paste0("lfc (", col_label, ")"),
+                                paste0("se (", col_label, ")"),
+                                paste0("W (", col_label, ")"),
+                                paste0("p (", col_label, ")"),
+                                paste0("q (", col_label, ")"))
+  
+  # =============================== Waterfall plot =============================
+  res_beta = res_beta %>%
+    pivot_longer(cols = -taxon_id, names_to = "var", values_to = "lfc")
+  res_se = res_se %>%
+    pivot_longer(cols = -taxon_id, names_to = "var", values_to = "se")
+  res_p = res_p %>%
+    pivot_longer(cols = -taxon_id, names_to = "var", values_to = "p")
+  res_q = res_q %>%
+    pivot_longer(cols = -taxon_id, names_to = "var", values_to = "q")
+  
+  res_model = res_beta %>% 
+    left_join(res_se, by = c("taxon_id", "var")) %>%
+    left_join(res_p, by = c("taxon_id", "var")) %>%
+    left_join(res_q, by = c("taxon_id", "var"))
+  
+  # Waterfall plot for the covariate of interest
+  df_fig1 = res_model %>%
+    filter(grepl(group, var),
+           q < .05) %>%
+    arrange(desc(lfc)) %>%
+    mutate(type = if_else(lfc > 0, "g1", "g2"),
+           star = case_when(p < .001 ~ "***",
+                            p < .01 ~ "**",
+                            TRUE ~ "*"),
+           pos = if_else(type == "g1", 
+                         lfc + se + 0.2,
+                         lfc - se - 0.2)
+    )
+  df_fig1 = df_fig1 %>%
+    mutate(var = ifelse(grepl("Medium", var), "Medium - Low", "High - Low"),
+           taxon_id = factor(taxon_id,
+                             levels = unique(df_fig1$taxon_id)))
+  
+  if (nrow(df_fig1) != 0) {
+    p_waterfall = df_fig1 %>%
+      ggplot(aes(x = taxon_id, y = lfc, 
+                 fill = var, color = var)) + 
+      geom_bar(stat = "identity", width = 0.7, 
+               position = position_dodge(width = 0.85, preserve = "total")) +
+      geom_errorbar(aes(ymin = lfc - se, 
+                        ymax = lfc + se), 
+                    width = 0.2,
+                    position = position_dodge(0.85), color = "black") + 
+      geom_text(aes(y = pos, label = star), 
+                vjust = .7, color = "black", 
+                position = position_dodge(width = 0.85)) +
+      labs(x = NULL, y = "Log fold change") +
+      scale_fill_brewer(palette = "Dark2",
+                        name = NULL, drop = FALSE) +
+      scale_color_brewer(palette = "Dark2", drop = FALSE) +
+      guides(color = "none") +
+      theme_bw() + 
+      theme(panel.grid.minor.y = element_blank(),
+            axis.text.x = element_text(size = 12, face = "bold",
+                                       angle = 60, hjust = 1))
+  } else {p_waterfall = NULL}
+  
+  # =============================== Relative abundance plot ====================
+  sig_taxa = as.character(df_fig1$taxon_id)
+  
+  if (length(sig_taxa) == 0) {
+    p_rel = NULL
+  } else {
+    rel_table = pseq %>%
+      microbiome::transform(transform = "compositional")
+    
+    df_fig2 = data.frame(t(abundances(rel_table)[sig_taxa, , drop = FALSE]), 
+                          check.names = FALSE) %>%
+      rownames_to_column("sampleid") %>% 
+      left_join(meta_data, by = "sampleid") %>%
+      dplyr::select(!!as.name(group), sig_taxa) %>% 
+      filter(!is.na(!!as.name(group))) %>%
+      group_by(!!as.name(group)) %>% 
+      summarise_all(mean)
+    
+    df_fig2_long = df_fig2 %>% 
+      pivot_longer(cols = -!!as.name(group), names_to = "taxon",
+                   values_to = "value") %>%
+      mutate(value = 100 * value)
+    df_fig2_long$taxon = factor(df_fig2_long$taxon, 
+                                 levels = unique(sig_taxa))
+    
+    p_rel = df_fig2_long %>%
+      ggplot(aes(x = !!as.name(group), y = value, 
+                 fill = !!as.name(group))) +
+      geom_col(position = position_stack()) + 
+      facet_wrap(.~ taxon, scales = "free_y") +
+      scale_fill_discrete(name = NULL) +
+      labs(x = NULL, y = "Relative abundance (%)") + 
+      theme_bw() + 
+      theme(strip.background = element_rect(fill = "white"),
+            axis.text.x = element_blank(),
+            axis.ticks.x = element_blank())
+  }
+  
+  obj = list(p_waterfall = p_waterfall, p_rel = p_rel, out = res_final)
+  return(obj)
+}
+```
+
+# 1. Analyses at genus level
 
 ```{r}
 # Aggregate taxa
-family_data = aggregate_taxa(otu_data, "Family")
-pseq = family_data
-sample_id = "sampleid"
+genus_data = aggregate_taxa(otu_data, "Genus")
+genus_data2 = merge_taxa2(genus_data, pattern = "\\Clostridium", name = "Clostridium")
+pseq = genus_data2
+genus_table = genus_data2@tax_table@.Data
 
 covariates = c("alcohol", "caregiver_stress_level", "depression_level", 
                "hostility_level", "das_level", "metabolic_syndrome_level")
@@ -194,30 +379,42 @@ for (i in seq_along(covariates)) {
   label = labels[i]
   adj_formula = covariate
   group = covariate
-  obj = pipeline(pseq, sample_id, adj_formula, group)
   
-  file_path = paste0("../outputs/ancombc_family_", covariate, ".csv")
-  res = obj$out
-  res[, -1] = signif(res[, -1], 3)
+  n_level = nlevels((as.factor(meta(pseq)[, group])))
+  
+  if (n_level == 2) {
+    obj = two_group_pipeline(pseq, adj_formula, group)
+  } else {
+    obj = multi_group_pipeline(pseq, adj_formula, group)
+  }
+  
+  file_path = paste0("../outputs/genus_", covariate, ".csv")
+  res = obj$out %>%
+    rename(Genus = taxon_id) %>%
+    left_join(as.data.frame(genus_table) %>% 
+                dplyr::select(Family, Genus), by = "Genus") %>%
+    dplyr::select(Family, everything())
+  
   write_csv(res, file_path)
   
-  heat_path1 = paste0("../images/abundance/family_heatmap_", covariate, ".jpeg")
-  heat_path2 = paste0("../images/abundance/family_heatmap_", covariate, ".pdf")
-  p1 = obj$p_heat + 
+  water_path1 = paste0("../images/abundance/genus_waterfall_", covariate, ".jpeg")
+  water_path2 = paste0("../images/abundance/genus_waterfall_", covariate, ".pdf")
+  p1 = obj$p_waterfall + 
     labs(title = label) +
-    theme(plot.title = element_text(hjust = 0.5))
+    theme(legend.position = "top",
+          plot.title = element_text(hjust = 0.5))
   print(p1)
   cat("\n \n \n")
-  ggsave(filename = heat_path1, plot = p1, height = 5, 
+  ggsave(filename = water_path1, plot = p1, height = 5, 
          width = 6.25, units = 'in', dpi = 300)
-  ggsave(filename = heat_path2, plot = p1, height = 5, width = 6.25)
+  ggsave(filename = water_path2, plot = p1, height = 5, width = 6.25)
   
-  rel_path1 = paste0("../images/abundance/family_relative_", covariate, ".jpeg")
-  rel_path2 = paste0("../images/abundance/family_relative_", covariate, ".pdf")
+  rel_path1 = paste0("../images/abundance/genus_relative_", covariate, ".jpeg")
+  rel_path2 = paste0("../images/abundance/genus_relative_", covariate, ".pdf")
   p2 = obj$p_rel + 
     labs(title = label) +
-    scale_fill_brewer(palette = "Paired") +
-    theme(plot.title = element_text(hjust = 0.5))
+    theme(legend.position = "top",
+          plot.title = element_text(hjust = 0.5))
   print(p2)
   cat("\n \n \n")
   ggsave(filename = rel_path1, plot = p2, height = 5, 
@@ -226,14 +423,13 @@ for (i in seq_along(covariates)) {
 }
 ```
 
-# 2. Analyses at genus level
+# 2. Analyses at species level
 
 ```{r}
 # Aggregate taxa
-genus_data = aggregate_taxa(otu_data, "Genus")
-genus_data2 = merge_taxa2(genus_data, pattern = "\\Clostridium", name = "Clostridium")
-pseq = genus_data2
-sample_id = "sampleid"
+species_data = aggregate_taxa(otu_data, "Species")
+pseq = species_data
+species_table = species_data@tax_table@.Data
 
 covariates = c("alcohol", "caregiver_stress_level", "depression_level", 
                "hostility_level", "das_level", "metabolic_syndrome_level")
@@ -246,29 +442,41 @@ for (i in seq_along(covariates)) {
   label = labels[i]
   adj_formula = covariate
   group = covariate
-  obj = pipeline(pseq, sample_id, adj_formula, group)
+  n_level = nlevels((as.factor(meta(pseq)[, group])))
   
-  file_path = paste0("../outputs/ancombc_genus_", covariate, ".csv")
-  res = obj$out
-  res[, -1] = signif(res[, -1], 3)
+  if (n_level == 2) {
+    obj = two_group_pipeline(pseq, adj_formula, group)
+  } else {
+    obj = multi_group_pipeline(pseq, adj_formula, group)
+  }
+  
+  file_path = paste0("../outputs/species_", covariate, ".csv")
+  res = obj$out %>%
+    rename(Species = taxon_id) %>%
+    left_join(as.data.frame(species_table) %>% 
+                dplyr::select(Family, Genus, Species), by = "Species") %>%
+    dplyr::select(Family, Genus, everything())
+  
   write_csv(res, file_path)
   
-  heat_path1 = paste0("../images/abundance/genus_heatmap_", covariate, ".jpeg")
-  heat_path2 = paste0("../images/abundance/genus_heatmap_", covariate, ".pdf")
-  p1 = obj$p_heat + 
+  water_path1 = paste0("../images/abundance/species_waterfall_", covariate, ".jpeg")
+  water_path2 = paste0("../images/abundance/species_waterfall_", covariate, ".pdf")
+  p1 = obj$p_waterfall + 
     labs(title = label) +
-    theme(plot.title = element_text(hjust = 0.5))
+    theme(legend.position = "top",
+          plot.title = element_text(hjust = 0.5))
   print(p1)
   cat("\n \n \n")
-  ggsave(filename = heat_path1, plot = p1, height = 5, 
+  ggsave(filename = water_path1, plot = p1, height = 5, 
          width = 6.25, units = 'in', dpi = 300)
-  ggsave(filename = heat_path2, plot = p1, height = 5, width = 6.25)
+  ggsave(filename = water_path2, plot = p1, height = 5, width = 6.25)
   
-  rel_path1 = paste0("../images/abundance/genus_relative_", covariate, ".jpeg")
-  rel_path2 = paste0("../images/abundance/genus_relative_", covariate, ".pdf")
+  rel_path1 = paste0("../images/abundance/species_relative_", covariate, ".jpeg")
+  rel_path2 = paste0("../images/abundance/species_relative_", covariate, ".pdf")
   p2 = obj$p_rel + 
     labs(title = label) +
-    theme(plot.title = element_text(hjust = 0.5))
+    theme(legend.position = "top",
+          plot.title = element_text(hjust = 0.5))
   print(p2)
   cat("\n \n \n")
   ggsave(filename = rel_path1, plot = p2, height = 5, 
