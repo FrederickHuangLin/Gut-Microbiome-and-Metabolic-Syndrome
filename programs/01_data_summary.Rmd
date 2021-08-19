@@ -84,27 +84,29 @@ summary_template =
   list("Age" = 
          list("Min" = ~ min(age, na.rm = TRUE),
               "Max" = ~ max(age, na.rm = TRUE),
-              "Mean (SD)" = ~ qwraps2::mean_sd(age, na_rm = TRUE)),
+              "Mean (SD)" = ~ qwraps2::mean_sd(age, na_rm = TRUE, show_n = "never")),
        "Stress" = 
          list("Min" = ~ min(caregiver_stress, na.rm = TRUE),
               "Max" = ~ max(caregiver_stress, na.rm = TRUE),
-              "Mean (SD)" = ~ qwraps2::mean_sd(caregiver_stress, na_rm = TRUE)),
+              "Mean (SD)" = ~ qwraps2::mean_sd(caregiver_stress, 
+                                               na_rm = TRUE, show_n = "never")),
        "Depression" = 
          list("Min" = ~ min(depression, na.rm = TRUE),
               "Max" = ~ max(depression, na.rm = TRUE),
-              "Mean (SD)" = ~ qwraps2::mean_sd(depression, na_rm = TRUE)),
+              "Mean (SD)" = ~ qwraps2::mean_sd(depression, na_rm = TRUE, show_n = "never")),
        "Hostility" = 
          list("Min" = ~ min(hostility, na.rm = TRUE),
               "Max" = ~ max(hostility, na.rm = TRUE),
-              "Mean (SD)" = ~ qwraps2::mean_sd(hostility, na_rm = TRUE)),
+              "Mean (SD)" = ~ qwraps2::mean_sd(hostility, na_rm = TRUE, show_n = "never")),
        "DAS" = 
          list("Min" = ~ min(das, na.rm = TRUE),
               "Max" = ~ max(das, na.rm = TRUE),
-              "Mean (SD)" = ~ qwraps2::mean_sd(das, na_rm = TRUE)),
+              "Mean (SD)" = ~ qwraps2::mean_sd(das, na_rm = TRUE, show_n = "never")),
        "Metabolic Syndrome" = 
          list("Min" = ~ min(metabolic_syndrome, na.rm = TRUE),
               "Max" = ~ max(metabolic_syndrome, na.rm = TRUE),
-              "Mean (SD)" = ~ qwraps2::mean_sd(metabolic_syndrome, na_rm = TRUE)),
+              "Mean (SD)" = ~ qwraps2::mean_sd(metabolic_syndrome, 
+                                               na_rm = TRUE, show_n = "never")),
        "Gender" =
          list("F" = ~ n_perc0(gender == "F", na_rm = TRUE),
               "M" = ~ n_perc0(gender == "M", na_rm = TRUE)),

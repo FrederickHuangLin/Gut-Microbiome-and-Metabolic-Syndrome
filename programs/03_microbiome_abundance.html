@@ -512,9 +512,12 @@ otu_data = phyloseq(OTU, TAX, META, tree)</code></pre>
 genus_data = aggregate_taxa(otu_data, &quot;Genus&quot;)
 genus_data2 = merge_taxa2(genus_data, pattern = &quot;\\Clostridium&quot;, name = &quot;Clostridium&quot;)
 pseq = genus_data2
-genus_table = genus_data2@tax_table@.Data
-
-covariates = c(&quot;alcohol&quot;, &quot;caregiver_stress_level&quot;, &quot;depression_level&quot;, 
+genus_table = pseq@tax_table@.Data</code></pre>
+<ol style="list-style-type: decimal">
+<li><p>Number of fecal samples 30,</p></li>
+<li><p>Number of genera 54.</p></li>
+</ol>
+<pre class="r"><code>covariates = c(&quot;alcohol&quot;, &quot;caregiver_stress_level&quot;, &quot;depression_level&quot;, 
                &quot;hostility_level&quot;, &quot;das_level&quot;, &quot;metabolic_syndrome_level&quot;)
 labels = c(&quot;Alcohol Use&quot;, &quot;Caregiver Stress Level&quot;, &quot;Depression Level&quot;,
            &quot;Hostility Level&quot;, &quot;DAS Level&quot;, &quot;Metabolic Syndrome Level&quot;)
@@ -585,9 +588,12 @@ for (i in seq_along(covariates)) {
 <pre class="r"><code># Aggregate taxa
 species_data = aggregate_taxa(otu_data, &quot;Species&quot;)
 pseq = species_data
-species_table = species_data@tax_table@.Data
-
-covariates = c(&quot;alcohol&quot;, &quot;caregiver_stress_level&quot;, &quot;depression_level&quot;, 
+species_table = pseq@tax_table@.Data</code></pre>
+<ol style="list-style-type: decimal">
+<li><p>Number of fecal samples 30,</p></li>
+<li><p>Number of species 43.</p></li>
+</ol>
+<pre class="r"><code>covariates = c(&quot;alcohol&quot;, &quot;caregiver_stress_level&quot;, &quot;depression_level&quot;, 
                &quot;hostility_level&quot;, &quot;das_level&quot;, &quot;metabolic_syndrome_level&quot;)
 labels = c(&quot;Alcohol Use&quot;, &quot;Caregiver Stress Level&quot;, &quot;Depression Level&quot;,
            &quot;Hostility Level&quot;, &quot;DAS Level&quot;, &quot;Metabolic Syndrome Level&quot;)

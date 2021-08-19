@@ -230,27 +230,29 @@ summary_template =
   list(&quot;Age&quot; = 
          list(&quot;Min&quot; = ~ min(age, na.rm = TRUE),
               &quot;Max&quot; = ~ max(age, na.rm = TRUE),
-              &quot;Mean (SD)&quot; = ~ qwraps2::mean_sd(age, na_rm = TRUE)),
+              &quot;Mean (SD)&quot; = ~ qwraps2::mean_sd(age, na_rm = TRUE, show_n = &quot;never&quot;)),
        &quot;Stress&quot; = 
          list(&quot;Min&quot; = ~ min(caregiver_stress, na.rm = TRUE),
               &quot;Max&quot; = ~ max(caregiver_stress, na.rm = TRUE),
-              &quot;Mean (SD)&quot; = ~ qwraps2::mean_sd(caregiver_stress, na_rm = TRUE)),
+              &quot;Mean (SD)&quot; = ~ qwraps2::mean_sd(caregiver_stress, 
+                                               na_rm = TRUE, show_n = &quot;never&quot;)),
        &quot;Depression&quot; = 
          list(&quot;Min&quot; = ~ min(depression, na.rm = TRUE),
               &quot;Max&quot; = ~ max(depression, na.rm = TRUE),
-              &quot;Mean (SD)&quot; = ~ qwraps2::mean_sd(depression, na_rm = TRUE)),
+              &quot;Mean (SD)&quot; = ~ qwraps2::mean_sd(depression, na_rm = TRUE, show_n = &quot;never&quot;)),
        &quot;Hostility&quot; = 
          list(&quot;Min&quot; = ~ min(hostility, na.rm = TRUE),
               &quot;Max&quot; = ~ max(hostility, na.rm = TRUE),
-              &quot;Mean (SD)&quot; = ~ qwraps2::mean_sd(hostility, na_rm = TRUE)),
+              &quot;Mean (SD)&quot; = ~ qwraps2::mean_sd(hostility, na_rm = TRUE, show_n = &quot;never&quot;)),
        &quot;DAS&quot; = 
          list(&quot;Min&quot; = ~ min(das, na.rm = TRUE),
               &quot;Max&quot; = ~ max(das, na.rm = TRUE),
-              &quot;Mean (SD)&quot; = ~ qwraps2::mean_sd(das, na_rm = TRUE)),
+              &quot;Mean (SD)&quot; = ~ qwraps2::mean_sd(das, na_rm = TRUE, show_n = &quot;never&quot;)),
        &quot;Metabolic Syndrome&quot; = 
          list(&quot;Min&quot; = ~ min(metabolic_syndrome, na.rm = TRUE),
               &quot;Max&quot; = ~ max(metabolic_syndrome, na.rm = TRUE),
-              &quot;Mean (SD)&quot; = ~ qwraps2::mean_sd(metabolic_syndrome, na_rm = TRUE)),
+              &quot;Mean (SD)&quot; = ~ qwraps2::mean_sd(metabolic_syndrome, 
+                                               na_rm = TRUE, show_n = &quot;never&quot;)),
        &quot;Gender&quot; =
          list(&quot;F&quot; = ~ n_perc0(gender == &quot;F&quot;, na_rm = TRUE),
               &quot;M&quot; = ~ n_perc0(gender == &quot;M&quot;, na_rm = TRUE)),
@@ -337,7 +339,7 @@ overall_tab</code></pre>
 </tr>
 <tr class="even">
 <td align="left">   Mean (SD)</td>
-<td align="left">28; 22.75 ± 8.02</td>
+<td align="left">22.75 ± 8.02</td>
 </tr>
 <tr class="odd">
 <td align="left"><strong>Depression</strong></td>
@@ -353,7 +355,7 @@ overall_tab</code></pre>
 </tr>
 <tr class="even">
 <td align="left">   Mean (SD)</td>
-<td align="left">28; 11.25 ± 9.01</td>
+<td align="left">11.25 ± 9.01</td>
 </tr>
 <tr class="odd">
 <td align="left"><strong>Hostility</strong></td>
@@ -369,7 +371,7 @@ overall_tab</code></pre>
 </tr>
 <tr class="even">
 <td align="left">   Mean (SD)</td>
-<td align="left">28; 14.86 ± 7.04</td>
+<td align="left">14.86 ± 7.04</td>
 </tr>
 <tr class="odd">
 <td align="left"><strong>DAS</strong></td>
@@ -385,7 +387,7 @@ overall_tab</code></pre>
 </tr>
 <tr class="even">
 <td align="left">   Mean (SD)</td>
-<td align="left">28; 24.50 ± 5.49</td>
+<td align="left">24.50 ± 5.49</td>
 </tr>
 <tr class="odd">
 <td align="left"><strong>Metabolic Syndrome</strong></td>
@@ -401,7 +403,7 @@ overall_tab</code></pre>
 </tr>
 <tr class="even">
 <td align="left">   Mean (SD)</td>
-<td align="left">29; 2.55 ± 1.45</td>
+<td align="left">2.55 ± 1.45</td>
 </tr>
 <tr class="odd">
 <td align="left"><strong>Gender</strong></td>

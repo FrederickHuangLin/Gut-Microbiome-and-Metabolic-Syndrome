@@ -366,8 +366,14 @@ multi_group_pipeline = function(pseq, adj_formula, group){
 genus_data = aggregate_taxa(otu_data, "Genus")
 genus_data2 = merge_taxa2(genus_data, pattern = "\\Clostridium", name = "Clostridium")
 pseq = genus_data2
-genus_table = genus_data2@tax_table@.Data
+genus_table = pseq@tax_table@.Data
+```
 
+1. Number of fecal samples `r nsamples(pseq)`,
+
+2. Number of genera `r ntaxa(pseq)`.
+
+```{r}
 covariates = c("alcohol", "caregiver_stress_level", "depression_level", 
                "hostility_level", "das_level", "metabolic_syndrome_level")
 labels = c("Alcohol Use", "Caregiver Stress Level", "Depression Level",
@@ -429,8 +435,14 @@ for (i in seq_along(covariates)) {
 # Aggregate taxa
 species_data = aggregate_taxa(otu_data, "Species")
 pseq = species_data
-species_table = species_data@tax_table@.Data
+species_table = pseq@tax_table@.Data
+```
 
+1. Number of fecal samples `r nsamples(pseq)`,
+
+2. Number of species `r ntaxa(pseq)`.
+
+```{r}
 covariates = c("alcohol", "caregiver_stress_level", "depression_level", 
                "hostility_level", "das_level", "metabolic_syndrome_level")
 labels = c("Alcohol Use", "Caregiver Stress Level", "Depression Level",
